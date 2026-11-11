@@ -1,0 +1,32 @@
+# Python y herramientas locales
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+
+# Secretos y datos personales: nunca versionarlos
+.env
+.env.*
+!.env.example
+data/
+uploads/
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key
+
+# Editores y sistema
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Archivos temporales de administración de GitHub
+.github-admin/

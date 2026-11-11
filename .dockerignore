@@ -1,0 +1,35 @@
+# Entornos virtuales locales
+.venv/
+venv/
+env/
+
+# Control de versiones
+.git/
+.gitignore
+.gitattributes
+
+# Caché y archivos temporales de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+
+# Documentos, pruebas y scripts de desarrollo
+docs/
+tests/
+scripts/
+.github/
+
+# Archivos de configuración locales y secretos
+.github-admin/
+.env
+.env.*
+
+# Infraestructura y archivos auxiliares
+Dockerfile*
+compose*.yaml
+docker-compose*.yml
+*.md
+LICENSE

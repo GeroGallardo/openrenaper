@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.9.18"
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+      - name: Comprobar que la API genera su contrato OpenAPI
+        run: uv run python -c "from app.main import app; app.openapi()"
+
+  docker:
+    name: docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Preparar configuración de entorno
+        run: cp .env.example .env
+      - name: Construir imagen con Docker Compose
+        run: docker compose build
+      - name: Iniciar contenedor del servicio
+        run: docker compose up -d
+      - name: Esperar arranque y verificar /health
+        run: |
+          for i in {1..30}; do
+            if curl -s -f http://127.0.0.1:8000/health; then
+              echo "Servicio saludable y respondiendo"
+              exit 0
+            fi
+            echo "Esperando que el servicio esté listo ($i/30)..."
+            sleep 2
+          done
+          echo "Error: el servicio no respondió en el tiempo esperado"
+          docker compose logs
+          exit 1
+      - name: Validar contrato de respuesta de /health
+        run: |
+          RESPONSE=$(curl -s http://127.0.0.1:8000/health)
+          echo "Respuesta recibida: $RESPONSE"
+          echo "$RESPONSE" | grep -q '"status":"ok"'
+      - name: Comprobar consumo directo sin autenticación
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8000/api/v1/consultas \
+            -H "Content-Type: application/json" \
+            -d '{"tipo": "dni", "numero": "invalido"}')
+          echo "Código HTTP recibido ante entrada inválida: $HTTP_CODE"
+          [ "$HTTP_CODE" -eq 422 ]
+      - name: Comprobar documentación Scalar
+        run: |
+          curl -fsS http://127.0.0.1:8000/docs -o scalar.html
+          grep -q '"url": "/openapi.json"' scalar.html
+          if curl -fsS http://127.0.0.1:8000/openapi.json | grep -q '"/docs"'; then
+            echo "/docs no debe figurar en el contrato OpenAPI"
+            exit 1
+          fi
+      - name: Comprobar renderizado de Chromium con páginas sintéticas
+        run: docker compose exec -T api python - < scripts/comprobar_renderizado.py
+      - name: Detener contenedor ordenadamente
+        if: always()
+        run: docker compose down --timeout 35
